@@ -11,6 +11,8 @@ torchvision 0.25.0
 tqdm        4.67.1
 ```
 
+Final runs were executed in Google Colab because my local machine did not have enough compute resources (primarily GPU memory and acceptable runtime) to finish stable experiments in reasonable time.
+
 Install dependencies:
 
 ```bash
@@ -18,6 +20,8 @@ pip install -r requirements.txt
 ```
 
 ### Reproducing results.json
+
+I used a Colab notebook to run the exact same repository code (no file changes specific to Colab): clone repo, install `requirements.txt`, run `validate.py` with the command below.
 
 ```bash
 python validate.py \
@@ -115,3 +119,23 @@ Unlocking the full backbone (`layer4`, `layer3`) from the beginning was tested. 
 ### Orthogonal head initialization
 
 `nn.init.orthogonal_` was tested as an alternative to Xavier. It produced slightly higher `val_accuracy_top1_init_head` (checkpoint 2) but identical or marginally lower fine-tuned accuracy (checkpoint 3). The small-scale Xavier initialization appears to give a more conservative and stable starting loss for ZO optimization. Discarded.
+
+### One-point estimator (thought to try, not final)
+
+I also considered switching from two-point SPSA to a one-point estimator to reduce cost per estimate. In practice, one-point variants were expected to have noticeably higher variance for this setup, and with a tight sample budget this usually hurts stability more than it helps speed. Because of that trade-off, I kept two-point perturbations in the final version.
+
+### Decaying epsilon schedule (tested briefly)
+
+I tested a simple decay for perturbation scale (`epsilon_t` decreasing over steps): larger perturbations early, smaller later. The idea was to explore broadly first and then refine updates. On short runs this made training less predictable: too large early epsilon caused noisy jumps, while too small late epsilon reduced effective progress. A fixed epsilon gave more stable behavior under the budget.
+
+### Layer-wise LR multipliers (tested briefly)
+
+I tried smaller effective step size for convolutional layers and larger for the head after unfreezing. This occasionally reduced instability, but overall gains were inconsistent versus the simpler shared Adam setup. I kept the simpler optimizer configuration in the final solution for reproducibility.
+
+### Sign-based updates (thought to try)
+
+I considered a ZO sign-style update (using only `sign(g_hat)`) to make steps robust to occasional large SPSA estimates. This was not included in the final pipeline because it required extra tuning of learning rate and clipping thresholds, and I prioritized a stable, easy-to-reproduce configuration.
+
+### EMA of model weights (thought to try)
+
+Another idea was to keep an exponential moving average (EMA) copy of model parameters and evaluate the EMA model. This can smooth noisy updates in zeroth-order training, but I did not finalize it due to additional bookkeeping and limited time for full validation under the official budget.
